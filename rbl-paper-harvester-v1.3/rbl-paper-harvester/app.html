@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RBL Paper Harvester</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>RBL Paper Harvester</h1>
+      <p class="sub">Tìm paper đa nguồn · snowballing · xuất CSV đúng format nhóm (SWT302 RBL-1)</p>
+    </div>
+    <nav>
+      <button class="tab active" data-tab="search">1. Search</button>
+      <button class="tab" data-tab="snow">2. Snowballing</button>
+      <button class="tab" data-tab="results">3. Kết quả &amp; Xuất <span id="badge" class="badge">0</span></button>
+      <button class="tab" data-tab="keys">Cài đặt API key</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ===== SEARCH ===== -->
+    <section id="tab-search" class="panel">
+      <label class="lbl">Chuỗi tìm (dạng (P) AND (I) AND (O), cụm nhiều từ đặt trong dấu nháy kép)</label>
+      <textarea id="q" rows="4" spellcheck="false" placeholder='("REST API" OR "RESTful API") AND ("boundary value analysis" OR "equivalence partitioning")'></textarea>
+      <div class="row">
+        <div><label class="lbl">Nhãn lần chạy (phien_ban)</label><input id="runLabel" value="V7" size="6"></div>
+        <div><label class="lbl">Từ năm (IC-Y)</label><input id="yearFrom" type="number" value="2020" style="width:90px"></div>
+        <div><label class="lbl">Tối đa mỗi nguồn</label><input id="max" type="number" value="500" style="width:90px"></div>
+        <div><label class="lbl">Trường tìm OpenAlex</label>
+          <select id="oaField"><option value="title_abstract">title-abstract (đúng protocol)</option><option value="all">mặc định: title + abstract + fulltext</option></select></div>
+      </div>
+      <fieldset>
+        <legend>Nguồn</legend>
+        <label><input type="checkbox" class="src" value="openalex" checked> OpenAlex <span class="tag ok">đếm PRISMA</span></label>
+        <label><input type="checkbox" class="src" value="ieee" checked> IEEE Xplore <span class="tag ok">đếm PRISMA</span> <span class="muted">(cần key)</span></label>
+        <label><input type="checkbox" class="src" value="s2" checked> Semantic Scholar <span class="tag no">không đếm</span></label>
+        <label><input type="checkbox" class="src" value="arxiv" checked> arXiv <span class="tag warn">preprint</span></label>
+        <label><input type="checkbox" class="src" value="crossref"> Crossref <span class="tag warn">không boolean</span></label>
+        <label><input type="checkbox" class="src" value="dblp"> dblp <span class="tag warn">không abstract</span></label>
+        <label><input type="checkbox" class="src" value="springer"> Springer Nature <span class="tag warn">ngoài protocol</span> <span class="muted">(cần key)</span></label>
+        <label><input type="checkbox" class="src" value="scholar"> Google Scholar (SerpAPI) <span class="tag no">không đếm · tốn lượt</span>
+          · số trang <input id="scholarPages" type="number" value="3" min="1" max="20" style="width:56px"></label>
+        <div class="muted small">Crossref/dblp: tách chuỗi thành tối đa <input id="lineCap" type="number" value="30" style="width:56px"> dòng từ khoá, mỗi dòng lấy <input id="perLine" type="number" value="20" style="width:56px"> kết quả.</div>
+      </fieldset>
+      <div class="row">
+        <button id="btnPreview" class="secondary">Xem chuỗi dịch cho từng nguồn</button>
+        <button id="btnRun" class="primary">Chạy search</button>
+        <button id="btnStop" class="danger" disabled>Dừng</button>
+      </div>
+      <div id="previewBox" class="preview hidden"></div>
+
+      <fieldset class="acm">
+        <legend>ACM Digital Library <span class="tag ok">đếm PRISMA</span> — không có API, nhập file export từ web</legend>
+        <p class="muted small">ACM cấm dùng script/robot cào dữ liệu (vi phạm có thể làm cả trường bị khoá quyền tải). Tool <b>không</b> cào ACM. Cách làm: (1) bấm nút dưới để mở ACM DL với chuỗi tìm ở trên, kiểm tra/chỉnh trường tìm cho giống PL; (2) trên ACM: <b>Export Citations → tab "All results" → BibTeX → tải về</b>; (3) nhập file .bib vào đây. Có thể nhập nhiều file, tool tự bỏ trùng.</p>
+        <div class="row">
+          <button id="btnAcmOpen" class="secondary">Mở ACM DL với chuỗi này</button>
+          <div><label class="lbl">Số kết quả ACM báo</label><input id="acmReported" type="number" min="0" style="width:110px"></div>
+          <div><label class="lbl">Chuỗi đã dùng trên ACM (ghi log)</label><input id="acmQuery" style="width:360px" placeholder="để trống = dùng chuỗi ở trên"></div>
+          <div><label class="lbl">File BibTeX (.bib)</label><input id="acmFile" type="file" accept=".bib,.bibtex,.txt" multiple></div>
+          <button id="btnAcmImport" class="primary">Nhập file ACM</button>
+        </div>
+      </fieldset>
+    </section>
+
+    <!-- ===== SNOWBALL ===== -->
+    <section id="tab-snow" class="panel hidden">
+      <p class="note">Theo RBL-1 (Bước A2b): <b>seed chỉ là paper đã INCLUDE ở vòng 2</b>, không dùng paper bị loại. Bài tìm được phải qua đủ 2 vòng screening. Mặc định các bài snowballing <b>không được tick</b>: bạn lướt tiêu đề và tick bài có vẻ liên quan để thêm vào 01.</p>
+      <label class="lbl">DOI của seed (mỗi dòng một DOI)</label>
+      <textarea id="seeds" rows="4" spellcheck="false" placeholder="10.48550/arXiv.2604.25862"></textarea>
+      <div class="row">
+        <div><label class="lbl">Nhãn</label><input id="snowLabel" value="SB1" size="6"></div>
+        <div><label class="lbl">Vòng</label><select id="round"><option>1</option><option>2</option></select></div>
+        <div><label class="lbl">Hướng tiến: từ năm</label><input id="snowYear" type="number" value="2020" style="width:90px"></div>
+        <div><label class="lbl">Tối đa mỗi seed/hướng</label><input id="snowMax" type="number" value="500" style="width:90px"></div>
+      </div>
+      <fieldset>
+        <legend>Hướng &amp; API</legend>
+        <label><input type="checkbox" class="dir" value="back" checked> Lùi (References)</label>
+        <label><input type="checkbox" class="dir" value="fwd" checked> Tiến (Citations)</label>
+        <span class="sep"></span>
+        <label><input type="checkbox" class="via" value="openalex" checked> qua OpenAlex</label>
+        <label><input type="checkbox" class="via" value="s2" checked> qua Semantic Scholar</label>
+        <label><input type="checkbox" class="via" value="crossref"> qua Crossref <span class="muted">(chỉ hướng lùi — reference nhà xuất bản gửi lên, gồm Springer/IEEE/ACM)</span></label>
+      </fieldset>
+      <div class="row">
+        <button id="btnSnow" class="primary">Chạy snowballing</button>
+        <button id="btnStop2" class="danger" disabled>Dừng</button>
+      </div>
+    </section>
+
+    <!-- ===== RESULTS ===== -->
+    <section id="tab-results" class="panel hidden">
+      <div id="stats" class="stats"></div>
+      <p class="note small">Cột <b>Gợi ý</b> là sơ loại tự động: tool đọc <b>toàn bộ tiêu đề + abstract</b> và đối chiếu IC-Y, IC-L, IC-P (REST API), IC-I (EP/BVA), EC-O. Đây chỉ là gợi ý để bạn đọc trước, <b>quyết định INCLUDE/EXCLUDE vẫn là của bạn</b>. Bài Google Scholar chỉ có đoạn trích và thường thiếu DOI: bấm <b>Bổ sung abstract + DOI</b> trước, còn thiếu DOI thì bấm <b>Mở trang bài</b>.</p>
+      <div id="flagStats" class="stats flags"></div>
+      <div class="row">
+        <button id="btnEnrich" class="secondary">Bổ sung abstract + DOI (link → OpenAlex → Crossref)</button>
+        <button id="btnPageDoi" class="secondary" title="Mở từng trang bài (như bấm vào link) để đọc DOI trong thẻ meta. Chậm: ~1,5 s/bài. Cần cấp quyền đọc trang web.">Mở trang bài để tìm DOI còn thiếu</button>
+        <button id="btnTickSuggest" class="secondary">Chỉ tick ƯU TIÊN + XEM</button>
+        <div><select id="flagFilter"><option value="">Gợi ý: tất cả</option><option>ƯU TIÊN</option><option>XEM</option><option>THIẾU ABSTRACT</option><option>ÍT KHẢ NĂNG</option><option>LOẠI?</option></select></div>
+      </div>
+      <div class="row">
+        <input id="filter" placeholder="Lọc theo tiêu đề / nguồn / nhãn…" style="flex:1;min-width:220px">
+        <button id="selAll" class="secondary">Tick tất cả (đang hiện)</button>
+        <button id="selNone" class="secondary">Bỏ tick (đang hiện)</button>
+      </div>
+      <div class="row">
+        <div><label class="lbl">Tiền tố mã</label><input id="prefix" value="K" size="4"></div>
+        <div><label class="lbl">Bắt đầu từ số</label><input id="startNo" type="number" value="8" style="width:80px"></div>
+        <button id="btnCsv" class="primary">Xuất 01_all_records.csv (bài đã tick)</button>
+        <button id="btnLog" class="secondary">Xuất đoạn search-log.md</button>
+        <button id="btnRaw" class="secondary">Xuất dữ liệu thô (.json)</button>
+        <button id="btnClear" class="danger">Xoá toàn bộ kết quả</button>
+      </div>
+      <div class="tablewrap">
+        <table id="tbl">
+          <thead><tr><th>✓</th><th>Năm</th><th>Tiêu đề</th><th>Nguồn</th><th>Lần</th><th>DOI</th><th>Ngôn ngữ</th><th>Snowball</th><th>Gợi ý</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== KEYS ===== -->
+    <section id="tab-keys" class="panel hidden">
+      <p class="note">Key chỉ lưu trong bộ nhớ của trình duyệt này (chrome.storage), <b>không ghi vào file xuất, log hay repo</b>. Không chụp màn hình trang này khi đã nhập key.</p>
+      <div class="grid">
+        <label class="lbl">OpenAlex API key <span class="muted">(miễn phí, bắt buộc từ 02/2026)</span></label><input id="k_openalex" type="password" autocomplete="off">
+        <label class="lbl">Email (mailto cho OpenAlex/Crossref)</label><input id="k_mailto" type="email" autocomplete="off">
+        <label class="lbl">Semantic Scholar API key <span class="muted">(tuỳ chọn, giảm lỗi 429)</span></label><input id="k_s2" type="password" autocomplete="off">
+        <label class="lbl">IEEE Xplore API key</label><input id="k_ieee" type="password" autocomplete="off">
+        <label class="lbl">SerpAPI key</label><input id="k_serpapi" type="password" autocomplete="off">
+        <label class="lbl">Springer Nature API key <span class="muted">(miễn phí, dev.springernature.com)</span></label><input id="k_springer" type="password" autocomplete="off">
+      </div>
+      <div class="row"><button id="btnSaveKeys" class="primary">Lưu key</button><span id="keyMsg" class="muted"></span></div>
+    </section>
+
+    <section class="logpanel">
+      <div class="row between"><b>Nhật ký chạy</b><span><button id="btnLastReq" class="link">mở request API gần nhất (debug)</button> · <button id="btnClearLog" class="link">xoá nhật ký</button></span></div>
+      <pre id="log"></pre>
+    </section>
+  </main>
+
+  <script src="core.js"></script>
+  <script src="sources.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
