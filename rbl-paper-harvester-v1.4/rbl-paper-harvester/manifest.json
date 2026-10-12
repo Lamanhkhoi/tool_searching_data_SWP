@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "RBL Paper Harvester",
+  "version": "1.4.0",
+  "description": "Tìm paper đa nguồn (OpenAlex, Semantic Scholar, IEEE Xplore, arXiv, Crossref, dblp, Google Scholar qua SerpAPI, Springer Nature, nhập file export ACM DL), snowballing và xuất CSV theo format nhóm RBL.",
+  "action": {
+    "default_title": "Mở RBL Paper Harvester"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://api.openalex.org/*",
+    "https://api.semanticscholar.org/*",
+    "https://ieeexploreapi.ieee.org/*",
+    "https://export.arxiv.org/*",
+    "https://api.crossref.org/*",
+    "https://dblp.org/*",
+    "https://serpapi.com/*",
+    "https://api.springernature.com/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ]
+}
